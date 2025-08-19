@@ -1,4 +1,3 @@
-# healthcare_doc_intelligence.py
 import streamlit as st
 import tempfile
 import os
@@ -17,7 +16,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 st.set_page_config(page_title="Healthcare Document Intelligence", layout="wide")
 
-# --- UI Styling ---
+# UI
 def render_styles():
     st.markdown("""
     <style>
@@ -29,7 +28,7 @@ def render_styles():
 
 render_styles()
 
-# --- Embedding (BioBERT / ClinicalBERT preferred if downloaded; else fallback) ---
+# Embeddings
 class MedicalEmbeddings(Embeddings):
     def __init__(self, model_name="all-MiniLM-L6-v2"):
         try:
@@ -43,7 +42,7 @@ class MedicalEmbeddings(Embeddings):
 
 medical_embeddings = MedicalEmbeddings()
 
-# --- PDF & DOCX Loader ---
+# PDF and Document Loader
 def process_pdf(file_path):
     reader = PdfReader(file_path)
     all_text = ''
@@ -61,7 +60,7 @@ def chunk_documents(text, source_name):
     splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
     return [Document(page_content=c, metadata={'source': source_name}) for c in splitter.split_text(text)]
 
-# --- Vector Database ---
+# Vector Database
 data_dir = Path("data/vectorstore")
 data_dir.mkdir(parents=True, exist_ok=True)
 vectorstore = Chroma(
@@ -70,13 +69,12 @@ vectorstore = Chroma(
     collection_name="medical_documents"
 )
 
-# --- LLM (Ollama CLI must be running and model downloaded) ---
+# LLM Model initialization
 llm = Ollama(model="llama3.1:8b", base_url="http://localhost:11434", temperature=0.1)
 
-# --- PubMed Retriever ---
+# Retriever for PubMed Data
 pubmed_retriever = PubMedRetriever(doc_content_chars_max=2000, max_retry=3)
 
-# --- Main UI ---
 st.markdown('<div class="main-header"><h1>Healthcare Document Intelligence System</h1><p>AI-Powered Retrieval for Medical Professionals</p></div>', unsafe_allow_html=True)
 
 with st.sidebar:
@@ -97,24 +95,24 @@ with st.sidebar:
                 vectorstore.add_documents(docs)
         st.success(f"{len(uploaded_files)} documents processed & indexed!")
 
-# --- Query Section ---
+# UI of Query Section
 st.subheader("Medical Knowledge Query")
 medical_query = st.text_area("Enter your query (medical, clinical, drug, research)...", height=80)
 mode = st.radio("Search Mode", ["Comprehensive", "Local Documents Only", "PubMed Only"])
 max_results = st.slider("Results to show", 3, 10, 5)
 
 if st.button("Search Medical Knowledge"):
-    # Retrieve from local indexed docs
+    # Code to retrieve from local uploaded documents
     local_docs = []
     if mode != "PubMed Only":
         local_docs = vectorstore.similarity_search(medical_query, k=max_results)
 
-    # Retrieve from PubMed (real-time)
+    # Retrieval from PubMed (real-time)
     pubmed_docs = []
     if mode in ["Comprehensive", "PubMed Only"]:
         pubmed_docs = pubmed_retriever.get_relevant_documents(medical_query)[:max_results]
 
-    # --- Compose Context for LLM ---
+    # Context info for LLM
     context = ""
     if local_docs:
         context += "\n\n".join([f"[{d.metadata.get('source')}] {d.page_content[:600]}" for d in local_docs])
@@ -140,7 +138,7 @@ Instructions:
 Answer:
 """
 
-    # --- LLM Inference ---
+    # Model Answer/Inference
     st.markdown('<div class="response-container"><b>Response:</b></div>', unsafe_allow_html=True)
     try:
         response = llm.invoke(prompt)
@@ -148,7 +146,7 @@ Answer:
     except Exception as e:
         st.error(f"LLM error: {e}")
 
-    # --- Sources Display ---
+    # Source of the answer
     if local_docs:
         st.markdown("**Local Sources Cited:**")
         for d in local_docs:
@@ -159,7 +157,7 @@ Answer:
         for i, d in enumerate(pubmed_docs, 1):
             st.markdown(f"**{i}. PubMed Abstract:** {d.page_content[:220]}...", unsafe_allow_html=False)
 
-    # --- Disclaimer ---
+    # Warning Sign
     st.warning("This answer is for educational purposes only. Consult healthcare professionals for any medical decisions.")
 
 # --- End ---
